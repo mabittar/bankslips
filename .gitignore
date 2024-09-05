@@ -21,10 +21,12 @@ site_build
 docs.zip
 archive.zip
 
-# vim temporary files
 *~
 .*.sw?
 .cache
+.db
+db/*
+/data
 
 # macOS
 .DS_Store

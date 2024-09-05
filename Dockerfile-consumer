@@ -44,8 +44,8 @@ COPY src /app/src/
 
 RUN mkdir -p /data
 
-# RUN useradd -ms /bin/bash appuser && chown -R appuser /app
-# RUN chown -R appuser:appuser /data
-# USER appuser
+RUN useradd -ms /bin/bash appuser && chown -R appuser /app
+RUN chown -R appuser:appuser /data
+USER appuser
 
 CMD ["python", "src/consumer.py"]
