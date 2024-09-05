@@ -1,6 +1,5 @@
 import asyncio
 import signal
-import async_timeout
 
 from aiokafka import AIOKafkaConsumer
 from sqlalchemy import create_engine, select
@@ -9,12 +8,10 @@ from sqlalchemy.orm import (
 )
 
 
-from .models import BankslipModel
-from .settings import settings
-from .schema import BankslipDTO, BankslipRequest
+from models.models import BankslipModel
+from src.settings import settings
+from routes.schema import BankslipDTO, BankslipRequest
 
-KAFKA_BOOTSTRAP_SERVERS = "kafka:29092"
-BANKSLIP_TOPIC = "bankslip_process"
 
 engine = create_engine(
     settings.DATABASE_URI,
@@ -26,46 +23,58 @@ Session = sessionmaker(
 
 
 class Propagator:
-    async def send_email(self, msg: BankslipDTO) -> BankslipDTO:
-        print(f"aqui envia arquivo: {msg.debt_id} para {msg.email}")
-        sent_bankslip = BankslipDTO(**msg.model_dump(), propagated=True)
-        return sent_bankslip
+    async def send_email(self, bs: BankslipDTO) -> BankslipDTO:
+        if hasattr(bs, "propagated") and bs.propagated:
+            return bs
+        print(f"aqui envia arquivo: {bs.debt_id} para {bs.email}")
+        bs.propagated = True
+        return bs
 
 
 class FileGenerator:
-    async def generate_file(self, msg: BankslipRequest) -> BankslipDTO:
-        print(f"aqui gera arquivo: {msg.debt_id}")
+    async def generate_file(self, bs: BankslipRequest) -> BankslipDTO:
+        if hasattr(bs, "bankslip_file"):
+            return bs
+        print(f"aqui gera arquivo: {bs.debt_id}")
         file = ""
-        fetched_bankslip = BankslipDTO(**msg.model_dump(), bankslip_file=file)
+        fetched_bankslip = BankslipDTO(
+            **bs.model_dump(), bankslip_file=file, propagated=False
+        )
         return fetched_bankslip
 
 
-class KafkaConsumer:
-    def __init__(self, loop):
+class MessageHandler:
+    def __init__(self):
         self.session = Session
-        self.loop = loop
-        self.consumer = AIOKafkaConsumer(
-            BANKSLIP_TOPIC,
-            loop=loop,
-            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-        )
 
-    async def get_bankslip(self, bankslip: BankslipDTO) -> BankslipDTO | None:
+    async def get_bankslip(self, bankslip: BankslipRequest) -> BankslipDTO | None:
         print(f"check if {bankslip.debt_id} exists")
+        existing = None
         with self.session() as conn:
-            result = await conn.scalars(
+            result = conn.scalars(
                 select(BankslipModel).where(BankslipModel.debt_id == bankslip.debt_id)
             )
             existing = result.one_or_none()
         if existing:
-            return BankslipDTO.model_validate(existing)
+            bs = BankslipDTO.model_validate(existing)
+            bs.existing = True
+            return bs
         else:
             None
 
-    async def update_bankslip(self, bankslip: BankslipDTO):
-        print(f"bankslip {bankslip.debt_id} finished, persisting")
+    async def create_or_update_bankslip(self, bs: BankslipDTO):
+        print(f"bankslip {bs.debt_id} finished, persisting")
         with self.session() as conn:
-            conn.add(bankslip)
+            if bs.existing:
+                result = conn.scalars(
+                    select(BankslipModel).where(BankslipModel.debt_id == bs.debt_id)
+                )
+                model = result.one()
+                model.bankslip_file = bs.bankslip_file
+                model.propagated = bs.propagated
+            else:
+                model = BankslipModel(**bs.model_dump(exclude="existing"))
+                conn.add(model)
             conn.commit()
 
     async def handle_message(self, msg: BankslipRequest):
@@ -73,79 +82,72 @@ class KafkaConsumer:
         Args:
             msg (BankslipRequest): consumed message to process.
         """
-        print("Creating event and start event handler.")
-        existing = await self.get_bankslip(msg)
-        if existing and existing.propagated:
-            return
+        print("Got new message and start handling message.")
         fetcher = FileGenerator()
         propagator = Propagator()
-        bs = await fetcher.generate_file(msg)
-        if bs:
-            propagator.send_email(bs)
-            await self.update_bankslip(bs)
-        print(f"Acked {msg.debt_id}")
-
-    async def consume(self):
-        seconds = 1
-        while True:
-            try:
-                await self.consumer.start()
-                async with async_timeout.timeout(seconds):
-                    async for msg in self.consumer:
-                        data = msg.value.decode("utf-8")
-                        bankslip = BankslipRequest.model_validate_json(data)
-                        await asyncio.create_task(
-                            self.handle_message(bankslip), name=bankslip.debt_id
-                        )
-                    await asyncio.sleep(seconds)
-            except asyncio.TimeoutError:
-                print(f"No message on topic waiting for {seconds} seconds.")
-                pass
-            except Exception as ex:
-                print(ex)
-                continue
+        existing = await self.get_bankslip(msg)
+        if existing and hasattr(existing, "propagated"):
+            if existing.propagated:
+                return
+        bs = existing if existing is not None else msg
+        bs = await fetcher.generate_file(bs)
+        bs = await propagator.send_email(bs)
+        await self.create_or_update_bankslip(bs)
 
     async def shutdown(self, loop, signal=None):
-        await self.consumer.stop()
-        """Cleanup tasks tied to the service's shutdown."""
         if signal:
             print(f"Received exit signal {signal.name}...")
-        tasks = []
-        for task in asyncio.all_tasks(loop):
-            if task is not asyncio.current_task(loop):
-                task.cancel()
-                tasks.append(task)
+        tasks = [
+            task
+            for task in asyncio.all_tasks(loop)
+            if task is not asyncio.current_task(loop)
+        ]
+        for task in tasks:
+            task.cancel()
         results = await asyncio.gather(*tasks, return_exceptions=True)
         print(f"Finished awaiting cancelled tasks, results: {results}")
         loop.stop()
 
     def handle_exception(self, loop, context):
-        # context["message"] will always be there; but context["exception"] may not
         msg = context.get("exception", context["message"])
         print(f"Caught exception: {msg}")
         print("Shutting down...")
         asyncio.create_task(self.shutdown(loop))
 
 
-def main():
+async def consume():
     loop = asyncio.get_event_loop()
-    consumer = KafkaConsumer(loop)
+    message_handler = MessageHandler()
     signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
     for s in signals:
         loop.add_signal_handler(
-            s, lambda: asyncio.create_task(consumer.shutdown(loop, signal=s))
+            s, lambda s=s: asyncio.create_task(message_handler.shutdown(loop, signal=s))
         )
-    loop.set_exception_handler(consumer.handle_exception)
-
-    try:
-        loop.create_task(consumer.consume())
-        loop.run_forever()
-    except KeyboardInterrupt:
-        print("Process interrupted")
-    finally:
-        loop.close()
-        print("Successfully shutdown the queue service.")
+    loop.set_exception_handler(message_handler.handle_exception)
+    consumer = AIOKafkaConsumer(
+        settings.BANKSLIP_TOPIC,
+        bootstrap_servers=[settings.KAFKA_BOOTSTRAP_SERVERS],
+        enable_auto_commit=True,
+        auto_offset_reset="earliest",
+        group_id="newGroup",
+    )
+    await consumer.start()
+    while True:
+        try:
+            async for msg in consumer:
+                data = msg.value.decode("utf-8")
+                bankslip = BankslipRequest.model_validate_json(data)
+                await asyncio.create_task(
+                    message_handler.handle_message(bankslip), name=bankslip.debt_id
+                )
+                print(f"Acked {bankslip.debt_id}")
+        except Exception as e:
+            print(e)
+            continue
+        # finally:
+        #     await consumer.stop()
 
 
 if __name__ == "__main__":
-    main()
+    print("Script running")
+    asyncio.run(consume())

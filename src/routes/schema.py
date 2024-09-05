@@ -16,6 +16,7 @@ class BankslipRequest(BaseModel):
 class BankslipDTO(BankslipRequest):
     bankslip_file: Optional[str] = Field(description="repesentacao do documento")
     propagated: Optional[bool] = Field(description="cobrança enviada")
+    existing: Optional[bool] = Field(description="cobrança já existe na base", default=False, exclude=True)
 
     class Config:
         from_attributes = True

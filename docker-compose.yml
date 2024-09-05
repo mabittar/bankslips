@@ -1,5 +1,38 @@
-version: "3.9"
 services:
+  db:
+    image: postgres:16
+    container_name: db
+    restart: always
+    ports:
+      - "5432:5432"
+    networks:
+      - bankslip-net
+    volumes:
+      - db-data:/var/lib/postgresql/data/pgdata
+      - ./create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    env_file:
+      - .env
+    environment:
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_PASSWORD=changethis
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=stock
+
+  adminer:
+    image: adminer
+    restart: always
+    depends_on:
+      - db
+    networks:
+      - bankslip-net
+    ports:
+      - "8080:8080"
+    environment:
+      - POSTGRES_PASSWORD=changethis
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=stock
+
   kafka-ui:
     image: provectuslabs/kafka-ui
     container_name: kafka-ui
@@ -36,6 +69,72 @@ services:
     networks:
       - bankslip-net
 
+  app:
+    container_name: app
+    build:
+      dockerfile: Dockerfile
+      context: ./
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - kafka
+    environment:
+      APP_ENV: LOCAL
+      APP_VERSION: 0.1.0
+      ASGI_LOGGER: uvicorn.asgi
+      DOCS_URL: /docs
+      OPENAPI_URL: /openapi.json
+      REDOC_URL: /redoc
+      SERVER_HOST: localhost
+      SERVER_PORT: 8000
+      SERVER_WORKERS: 4
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      BANKSLIP_TOPIC: bankslip_process
+      POSTGRES_SERVER: db
+      POSTGRES_PASSWORD: changethis
+      POSTGRES_USER: admin
+      POSTGRES_DB: bankslip
+      POSTGRES_PORT: 5432
+      POSTGRES_DRIVER: psycopg
+    networks:
+      - bankslip-net
+
+  consumer:
+    container_name: kafka-consumer
+    build:
+      dockerfile: Dockerfile-consumer
+      context: ./
+    restart: always
+    depends_on:
+      - kafka
+      - app
+    environment:
+      APP_ENV: LOCAL
+      APP_VERSION: 0.1.0
+      ASGI_LOGGER: uvicorn.asgi
+      DOCS_URL: /docs
+      OPENAPI_URL: /openapi.json
+      REDOC_URL: /redoc
+      SERVER_HOST: localhost
+      SERVER_PORT: 8000
+      SERVER_WORKERS: 4
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      BANKSLIP_TOPIC: bankslip_process
+      POSTGRES_SERVER: db
+      POSTGRES_PASSWORD: changethis
+      POSTGRES_USER: admin
+      POSTGRES_DB: bankslip
+      POSTGRES_PORT: 5432
+      POSTGRES_DRIVER: psycopg
+    deploy:
+      mode: replicated
+      replicas: 6
+    networks:
+      - bankslip-net
+
+volumes:
+  db-data:
+
 networks:
   bankslip-net:
-    external: true

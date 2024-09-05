@@ -1,0 +1,14 @@
+.mypy_cache/
+.pytest_cache/
+__pycache__/
+.coverage
+coverage/**
+.gitignore
+.github/**
+*.md
+.dockerignore
+Dockerfile.dev
+Dockerfile.prod
+docker-compose.yaml
+.egg*
+tests/

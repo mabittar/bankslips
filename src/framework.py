@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
-from .db import sessionmanager
+from .infra.db import asyncsessionmanager
 from .settings import AppSettings, get_settings
 
 
@@ -15,7 +15,7 @@ class Framework:
     ):
         if init_db:
             db_str = settings.DATABASE_URI if settings.DATABASE_URI != "" else db_url
-            sessionmanager.init(
+            asyncsessionmanager.init(
                 db_str,
                 settings.set_engine_args,
                 settings.set_session_args,
@@ -25,9 +25,10 @@ class Framework:
         async def lifespan(app: FastAPI):
             print("Welcome 🛬")
             print(f"Application v{app.version} started elegantly!")
+
             yield
-            if sessionmanager._engine is not None:
-                sessionmanager.close()
+            if asyncsessionmanager._engine is not None:
+                await asyncsessionmanager.close()
             get_settings.cache_clear()
             print(f"Application v{app.version} shut down gracefully!")
 

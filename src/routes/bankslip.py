@@ -1,4 +1,3 @@
-import csv
 from http import HTTPStatus
 from fastapi import APIRouter, UploadFile, HTTPException
 import pandas as pd
@@ -6,10 +5,10 @@ from pydantic import ValidationError
 from sqlalchemy import select
 
 
-from .application.process_batch_application import ProcessBatchApplication
-from .db import SessionDep
-from .models import BankslipModel
-from .settings import settings
+from ..application.process_batch_application import ProcessBatchApplication
+from ..infra.db import SessionDep
+from ..models.models import BankslipModel
+from ..settings import settings
 from .schema import BankslipDTO, BankslipRequest
 
 router = APIRouter(tags=["bankslip"], prefix="/bankslip")
@@ -17,7 +16,7 @@ router = APIRouter(tags=["bankslip"], prefix="/bankslip")
 
 @router.get("/{debt_id}", status_code=HTTPStatus.OK)
 async def get(session: SessionDep, debt_id: str) -> BankslipDTO:
-    result = session.scalars(
+    result = await session.scalars(
         select(BankslipModel).where(BankslipModel.debt_id == debt_id)
     )
     existing = result.one_or_none()
@@ -57,7 +56,7 @@ def process_row(row) -> tuple[BankslipRequest, None] | tuple[None, str]:
 
 
 @router.post("/batch", status_code=HTTPStatus.CREATED)
-async def batch_process(file: UploadFile, session: SessionDep):
+async def batch_process(file: UploadFile):
     if not file:
         raise HTTPException(status_code=400, detail="No upload file sent")
     process_batch = ProcessBatchApplication()
@@ -71,7 +70,8 @@ async def batch_process(file: UploadFile, session: SessionDep):
                     failed_rows.append({"row": index, "error": error})
                 else:
                     parsed_data.append(data)
-            process_batch.execute(data)
+            await process_batch.execute(parsed_data)
+            parsed_data = []
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

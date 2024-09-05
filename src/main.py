@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from .framework import Framework
-from .router import router
+from .routes.bankslip import router
 from .settings import settings
 
 

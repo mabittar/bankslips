@@ -1,11 +1,10 @@
-import uuid
 from datetime import datetime
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
     mapped_column,
 )
-from sqlalchemy import TIMESTAMP, UUID, func
+from sqlalchemy import TIMESTAMP, func
 
 
 class Base(DeclarativeBase):

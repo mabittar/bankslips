@@ -49,10 +49,7 @@ class AppSettings(BaseSettings):
         environ.get("KAFKA_BOOTSTRAP_SERVERS", "kafka:29092")
     )
 
-
-    BANKSLIP_TOPIC: str = str(
-        environ.get("BANKSLIP_TOPIC", "bankslip_process")
-    )
+    BANKSLIP_TOPIC: str = str(environ.get("BANKSLIP_TOPIC", "bankslip_process"))
 
     POSTGRES_SERVER: str = str(environ.get("POSTGRES_SERVER"))
     POSTGRES_PORT: int = int(environ.get("POSTGRES_PORT", 5432))
@@ -73,7 +70,7 @@ class AppSettings(BaseSettings):
     def DATABASE_URI(self) -> str:
         if self.DB is not None:
             return self.DB
-        return f"postgresql{self.POSTGRES_DRIVER}://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        return f"postgresql+{self.POSTGRES_DRIVER}://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     @classmethod
     @field_validator("DATABASE_URI")
@@ -98,7 +95,6 @@ class AppSettings(BaseSettings):
             "echo_sql": self.ECHO_SQL,
         }
 
-    # https://docs.sqlalchemy.org/en/14/core/pooling.html#switching-pool-implementations
     @property
     def set_engine_args(self) -> dict:
         poolclass = NullPool if "sqlite" not in self.DATABASE_URI else QueuePool
@@ -115,6 +111,13 @@ class AppSettings(BaseSettings):
         return {
             "expire_on_commit": self.BD_EXPIRES_ON_COMMIT,  # False will prevent attributes from being expired
             "autoflush": self.DB_AUTO_FLUSH,
+        }
+
+    @property
+    def set_kafka_args(self) -> dict:
+        return {
+            "bootstrap_servers": self.KAFKA_BOOTSTRAP_SERVERS,
+            "acks": 0,
         }
 
 

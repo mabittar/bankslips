@@ -1,0 +1,51 @@
+# temp stage
+FROM python:3.11-slim-buster AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install gcc libpq-dev -y && \
+    apt-get autoremove --purge -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /app
+
+RUN python -m pip install --upgrade pip
+RUN python -m pip install --upgrade setuptools wheel
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+
+FROM python:3.11-slim-buster
+
+ARG POSTGRES_PASSWORD
+
+ENV KAFKA_BOOTSTRAP_SERVERS="localhost:9093"
+ENV POSTGRES_SERVER="db"
+ENV POSTGRES_USER="admin"
+ENV POSTGRES_DB="bankslip"
+ENV POSTGRES_PORT="5432"
+ENV POSTGRES_DRIVER="psycopg"
+ENV POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+
+EXPOSE 8000
+WORKDIR /app
+
+COPY --from=builder /app/wheels /wheels
+COPY --from=builder /app/requirements.txt /app
+
+RUN pip install --no-cache /wheels/*
+
+ENV PYTHONPATH=/app
+
+COPY src /app/src/
+
+RUN mkdir -p /data
+
+# RUN useradd -ms /bin/bash appuser && chown -R appuser /app
+# RUN chown -R appuser:appuser /data
+# USER appuser
+
+CMD ["python", "src/consumer.py"]

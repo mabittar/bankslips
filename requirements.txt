@@ -19,10 +19,13 @@ markdown-it-py==3.0.0
 MarkupSafe==2.1.5
 mdurl==0.1.2
 orjson==3.10.7
+pandas==2.2.2
 pydantic==2.8.2
 pydantic-extra-types==2.9.0
 pydantic-settings==2.4.0
 pydantic_core==2.20.1
+psycopg==3.2.1
+psycopg-binary==3.2.1
 Pygments==2.18.0
 python-dotenv==1.0.1
 python-multipart==0.0.9
