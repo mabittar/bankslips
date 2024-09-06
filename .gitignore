@@ -25,7 +25,7 @@ archive.zip
 .*.sw?
 .cache
 .db
-db/*
+db
 /data
 
 # macOS

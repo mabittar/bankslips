@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 
 from ..application.process_batch_application import ProcessBatchApplication
-from ..infra.db import SessionDep
+from ..infra.db import AsyncSessionDep
 from ..models.models import BankslipModel
 from ..settings import settings
 from .schema import BankslipDTO, BankslipRequest
@@ -15,7 +15,7 @@ router = APIRouter(tags=["bankslip"], prefix="/bankslip")
 
 
 @router.get("/{debt_id}", status_code=HTTPStatus.OK)
-async def get(session: SessionDep, debt_id: str) -> BankslipDTO:
+async def get(session: AsyncSessionDep, debt_id: str) -> BankslipDTO:
     result = await session.scalars(
         select(BankslipModel).where(BankslipModel.debt_id == debt_id)
     )
@@ -25,8 +25,8 @@ async def get(session: SessionDep, debt_id: str) -> BankslipDTO:
     return BankslipDTO.model_validate(existing)
 
 
-@router.post("/", status_code=HTTPStatus.CREATED)
-async def create(session: SessionDep, body: BankslipRequest) -> BankslipDTO:
+@router.post("", status_code=HTTPStatus.CREATED)
+async def create(session: AsyncSessionDep, body: BankslipRequest) -> BankslipDTO:
     result = await session.scalars(
         select(BankslipModel).where(BankslipModel.debt_id == body.debt_id)
     )

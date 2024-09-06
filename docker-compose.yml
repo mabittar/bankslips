@@ -9,8 +9,6 @@ services:
       - bankslip-net
     volumes:
       - db-data:/var/lib/postgresql/data/pgdata
-      - ./create_tables.sql:/docker-entrypoint-initdb.d/create_tables.sql
-      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     env_file:
       - .env
     environment:
@@ -101,14 +99,12 @@ services:
       - bankslip-net
 
   consumer:
-    container_name: kafka-consumer
     build:
       dockerfile: Dockerfile-consumer
       context: ./
     restart: always
     depends_on:
       - kafka
-      - app
     environment:
       APP_ENV: LOCAL
       APP_VERSION: 0.1.0
