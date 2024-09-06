@@ -26,7 +26,6 @@ A solução utiliza os seguintes componentes:
 
 essa imagem foi gerada a partir do arquivo `diagrams.py`
 
-
 ## Fluxo de Trabalho
 
 1. O **Usuário** faz upload de um arquivo CSV contendo informações dos boletos via o endpoint `/bankslip/batch`.
@@ -107,7 +106,6 @@ make clean
 
 Subir os serviços com Docker Compose:
 
-
 ```bash
 make up
 
@@ -115,9 +113,27 @@ make up
 
 4. **Acessar os serviços:**
 
-- API FastAPI: http://localhost:8000/docs
-- Adminer: http://localhost:8080
-- Kafka-UI: http://localhost:8081
+- API FastAPI: <http://localhost:8000/docs>
+- Adminer: <http://localhost:8080>
+- Kafka-UI: <http://localhost:8081>
+
+
+4.1 **Criando a tabela no banco de dados**
+
+Acesso o serviço Adminer, através da URL informada acima.
+
+Para login utilize as seguintes informações:
+
+```text
+System: PostgreSQL
+Server: db
+Username: admin
+Password: changethis
+Database: bankslip
+
+```
+
+Acesse o menu `SQL Command`, no painel esquerdo e execute o scritp que está em create_table.sql na raíz desse repositório.
 
 ## Uso da API
 
@@ -128,6 +144,8 @@ make up
 - Descrição: Recebe um arquivo CSV com informações dos boletos para processamento.
 
 Exemplo de Requisição
+
+> *Antes de fazer a requisição garanta que a tabela bankslip exista no banco de dados*
 
 ```bash
 curl -X POST "http://localhost:8000/bankslip/batch" \
@@ -156,6 +174,7 @@ pytest tests/
 - Tratamento de erros: Adicionar tratamento de erros refinados e mais explicativos. Assim com ooutras validações
 - Autenticação e Autorização: Implementar segurança nos endpoints da API e CORS
 - Escalabilidade: Otimizar o consumidor Kafka para melhor performance e escalabilidade.
+- Testes: ampliar a cobertura de testes e garantir um ambiente de testes integrados.
 - CI/CD: Configurar pipelines de integração e entrega contínuas.
 
 ### Ambiente Produtivo
@@ -163,4 +182,3 @@ pytest tests/
 Essa solução é uma POC. Utilizada para provar mostrar que é possível consumir um arquivo com muitas linhas de forma ágil e distribuída, mas para ambientes produtivos utilizaria uma arquitetura voltada a eventos e soluções serverless.
 
 Um serviço autenticado para receber o arquivo e fazer as validações iniciais, que faria o envio do arquivo corrigido para uma Bucket. Uma função serverless para reagir ao evento de criação do arquivo no bucket e enviar chuncks de entradas para um PubSub e outra função serverless para escalar conforme quantidade de chuncks recebidos e realizar a atividade final.
-
