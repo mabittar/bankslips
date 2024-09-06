@@ -14,7 +14,8 @@ class Framework:
         db_url: str | None = None,
     ):
         if init_db:
-            db_str = settings.DATABASE_URI if settings.DATABASE_URI != "" else db_url
+            # db_str = settings.DATABASE_URI if settings.DATABASE_URI != "" else db_url
+            db_str = db_url if db_url else settings.DATABASE_URI
             asyncsessionmanager.init(
                 db_str,
                 settings.set_engine_args,
@@ -25,7 +26,6 @@ class Framework:
         async def lifespan(app: FastAPI):
             print("Welcome 🛬")
             print(f"Application v{app.version} started elegantly!")
-
             yield
             if asyncsessionmanager._engine is not None:
                 await asyncsessionmanager.close()

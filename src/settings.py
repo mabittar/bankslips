@@ -16,6 +16,7 @@ from sqlalchemy.pool import QueuePool, NullPool
 class AppEnvironment(str, Enum):
     LOCAL = "local"
     PRODUCTION = "production"
+    TEST = "test"
 
 
 class AppSettings(BaseSettings):
@@ -58,7 +59,7 @@ class AppSettings(BaseSettings):
     POSTGRES_PASSWORD: str = str(environ.get("POSTGRES_PASSWORD"))
     POSTGRES_DB: str = str(environ.get("POSTGRES_DB", "stock"))
     POSTGRES_ECHO: bool = bool(environ.get("POSTGRES_ECHO", False))
-    POSTGRES_DRIVER: str = str(environ.get("POSTGRES_DRIVER", "asyncpg"))
+    POSTGRES_DRIVER: str = str(environ.get("POSTGRES_DRIVER", "psycopg"))
     DB_POOL_SIZE: int = int(environ.get("POSTGRES_POOL_SIZE", 20))
     BD_MAX_CONNECTIONS: int = int(environ.get("BD_MAX_CONNECTIONS", 10))
     BD_POOL_PRE_PING: bool = bool(environ.get("BD_POOL_PRE_PING", True))
@@ -121,6 +122,13 @@ class AppSettings(BaseSettings):
         }
 
 
+class AppTestSettings(AppSettings):
+    ENVIRONMENT: AppEnvironment = AppEnvironment.TEST
+    DESCRIPTION: str = f"Application ({ENVIRONMENT})."
+    AppSettings.set_session_args = {}
+    AppSettings.set_engine_args = {}
+
+
 class AppLocalSettings(AppSettings):
     ENVIRONMENT: AppEnvironment = AppEnvironment.LOCAL
     DESCRIPTION: str = f"Application ({ENVIRONMENT})."
@@ -138,6 +146,8 @@ class FactoryAppSettings:
     def __call__(self) -> AppSettings:
         if self.environment == AppEnvironment.PRODUCTION:
             return AppProductionSettings()
+        elif self.environment == AppEnvironment.TEST:
+            return AppLocalSettings()
         return AppLocalSettings()
 
 

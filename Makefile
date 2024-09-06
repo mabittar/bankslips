@@ -44,4 +44,4 @@ run-consumer:
 
 # Passo 5: Comando completo para rodar o processo
 .PHONY: start
-start: clean up build-consumer run-consumer
+start: clean up
